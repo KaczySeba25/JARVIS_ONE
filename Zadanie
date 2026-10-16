@@ -1,0 +1,19 @@
+Jarvis, otrzymujesz zadanie o najwyższym priorytecie: Pełna i autonomiczna budowa infrastruktury konta TikTok od zera.
+
+CEL:
+
+Samodzielne założenie adresu email niezbędnego do rejestracji.
+Samodzielna rejestracja konta na TikToku.
+Zapewnienie pełnej kontroli nad kontem (Login, Hasło, Tokeny).
+Zapisanie wszystkich danych dostępowych w vault_manager.
+WYTYCZNE WYKONAWCZE:
+
+Wykorzystaj pełną moc swojego środowiska. Jeśli musisz zainstalować dodatkowe biblioteki do automatyzacji przeglądarek (np. Playwright, Selenium), zrób to.
+Spróbuj wszystkich możliwych metod automatyzacji.
+Jeśli napotkasz blokadę, której nie da się obejść kodem (np. CAPTCHA, weryfikacja SMS), nie przerywaj zadania. Zastosuj PROTOKÓŁ SAMONAPRAWY: zdiagnozuj blokadę, opisz mi dokładnie, co jest potrzebne, i poproś o konkretną interwencję ludzką, a następnie kontynuuj proces.
+Działaj w trybie 24/7. Jeśli proces wymaga czasu, wykonuj go w pętli, aż do osiągnięcia celu.
+Pamiętaj o:
+
+[TECHNICAL EXECUTION TRACE] dla każdego etapu.
+[HONEST CRITIQUE] po każdej próbie rejestracji.
+Potwierdź zrozumienie i rozpocznij od KROKU 1: Research najlepszych metod automatycznej rejestracji kont w 2026 roku. Do dzieła!"

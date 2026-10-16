@@ -1,0 +1,13 @@
+# Protokół Pozyskiwania i Weryfikacji Wiedzy (PPWK)
+
+## 1. Cel
+Zapewnienie, że każda nowa informacja trafiająca do bazy wiedzy jest:
+- Wiarygodna (weryfikacja źródła).
+- Aktualna (data).
+- Użyteczna (tagowanie biznesowe).
+
+## 2. Proces (3 Fazy)
+
+### Faza 1: INGEST (Pozyskanie)
+- **Źródła:** Tylko autorytatywne (oficjalne dokumenty, zaufane media branżowe, dane z API, raporty firm).
+- **Akcja:** Pobranie surowej treści za pomocą `
