@@ -1,14 +1,12 @@
-#!/usr/bin/env python3
-"""Wrapper dla bootstrapowania środowiska JARVIS ONE."""
-import subprocess
-import sys
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parent
-SCRIPT = ROOT / "scripts" / "bootstrap_agent.py"
-
-if __name__ == "__main__":
-    if not SCRIPT.exists():
-        raise FileNotFoundError(f"Brak pliku: {SCRIPT}")
-    subprocess.check_call([sys.executable, str(SCRIPT)])
-
+openai>=1.0.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+pandas>=2.2.0
+aiohttp>=3.9.0
+web3>=6.0.0
+tavily-python>=0.3.0
+duckduckgo-search>=6.1.0
+beautifulsoup4>=4.12.0
+lxml>=5.2.0
+cryptography>=40.0.0
+playwright>=1.40.0
