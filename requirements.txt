@@ -1,12 +1,76 @@
-openai>=1.0.0
-python-dotenv>=1.0.0
-requests>=2.31.0
-pandas>=2.2.0
-aiohttp>=3.9.0
-web3>=6.0.0
-tavily-python>=0.3.0
-duckduckgo-search>=6.1.0
-beautifulsoup4>=4.12.0
-lxml>=5.2.0
-cryptography>=40.0.0
-playwright>=1.40.0
+#!/usr/bin/env python3
+"""Autonomiczna instalacja zależności JARVIS ONE.
+
+- instaluje brakujące biblioteki z requirements.txt
+- tworzy .env z VAULT_KEY, AUTO_APPROVE, AUTO_RUN_BROWSER, PLAYWRIGHT_INSTALL
+- opcjonalnie instaluje przeglądarki Playwright
+"""
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+REQ_FILE = ROOT / "requirements.txt"
+ENV_FILE = ROOT / ".env"
+
+
+def read_requirements(path: Path):
+    if not path.exists():
+        return []
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        item = line.strip()
+        if not item or item.startswith("#"):
+            continue
+        out.append(item)
+    return out
+
+
+def ensure_key(env_path: Path, key_name: str, value: str | None = None):
+    if not env_path.exists():
+        env_path.write_text("", encoding="utf-8")
+    current = env_path.read_text(encoding="utf-8")
+    if f"{key_name}=" in current:
+        return
+    if value is None:
+        from cryptography.fernet import Fernet
+        value = Fernet.generate_key().decode()
+    with env_path.open("a", encoding="utf-8") as fh:
+        fh.write(f"{key_name}={value}\n")
+
+
+def install_requirements():
+    pkgs = read_requirements(REQ_FILE)
+    if not pkgs:
+        print("Brak wymagań w requirements.txt.")
+        return 0
+    print(f"Instaluję {len(pkgs)} pakietów dla JARVIS ONE...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", *pkgs])
+    return 0
+
+
+def maybe_install_playwright():
+    if os.getenv("PLAYWRIGHT_INSTALL", "true").lower() == "true":
+        print("PLAYWRIGHT_INSTALL=true -> instalacja przeglądarek Playwright...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "playwright", "install"])
+        except Exception as exc:
+            print(f"Playwright install failed: {exc}")
+
+
+def main():
+    install_requirements()
+    ensure_key(ENV_FILE, "VAULT_KEY")
+    ensure_key(ENV_FILE, "AUTO_APPROVE", "true")
+    ensure_key(ENV_FILE, "AUTO_RUN_BROWSER", "true")
+    ensure_key(ENV_FILE, "PLAYWRIGHT_INSTALL", "true")
+    maybe_install_playwright()
+    print("Bootstrap zakończony. Jarvis działa w trybie autonomicznym.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
