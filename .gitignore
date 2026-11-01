@@ -1,15 +1,4 @@
+# Zasady bezpieczeństwa i repo
 .env
 .env.*
-
-__pycache__/
-*.pyc
-*.pyo
-
-data_vault/vault.key
-data_vault/vault.salt
-data_vault/vault.enc
-data_vault/memory.db
-
-tiktok_infra/session.json
-
-.vscode/
+/data_vault/

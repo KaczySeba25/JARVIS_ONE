@@ -8,6 +8,8 @@ import importlib
 import sys
 import json
 import shutil
+import traceback
+import datetime
 from openai import OpenAI
 from dotenv import load_dotenv
 from pathlib import Path
@@ -30,7 +32,7 @@ load_dotenv()
 # GLOBALNE KONSTANTY I BEZPIECZEŃSTWO
 # ================================================================== #
 TOOL_RE = re.compile(r"\[\s*(WRITE_FILE|APPEND_FILE|READ_FILE|LIST_FILES|FETCH_URL|RUN_SKILL|SAVE_SKILL|RECALL|REMEMBER)\s*:")
-ACTION_WORDS = ("stworz", "stwórz", "zapisz", "odczytaj", "wczytaj", "sprawdz", "sprawdź", "pobierz", "uruchom", "wykonaj", "dodaj", "zmien", "zmień", "usun", "usuń", "napisz", "wypisz", "wygeneruj", "zbuduj", "skasuj", "przenies", "przenieś", "pamietaj", "pamiętaj", "zapamietaj", "zapamiętaj")
+ACTION_WORDS = ("stworz", "stwórz", "zapisz", "odczytaj", "wczytaj", "sprawdz", "sprawdź", "pobierz", "uruchom", "wykonaj", "dodaj", "zmien", "zmień", "usun", "usuń", "napisz", "wypisz", "wyge", "wygeneruj", "zbuduj", "skasuj", "przenies", "przenieś", "pamietaj", "pamiętaj", "zapamietaj", "zapamiętaj")
 
 MAX_HISTORY_MSGS = 6 
 MAX_TOOL_TURNS = 12
@@ -38,11 +40,14 @@ MAX_REPEATS = 3
 MAX_REPLY_STORE = 1000
 
 TESTNET_INDICATORS = ("testnet.binance.vision", "testnet.binance.com", "trading_agent_config", "binance_helper")
-# Poprawka: usunięcie // z TESTNET_INDICATORS
-TESTNET_INDICATORS = ("testnet.binance.vision", "testnet.binance.com", "trading_agent_config", "binance_helper")
 TRADING_PATTERNS = ("/api/v3/order", "place_order", "place_limit_order", "place_limit_buy", "create_order", "new_order")
 PRODUCTION_HOSTS = ("api.binance.com", "api1.binance.com", "api2.binance.com", "api3.binance.com")
 PRODUCTION_KEY_NAMES = ("BINANCE_API_KEY", "BINANCE_SECRET_KEY", "BINANCE_SECRET")
+
+ROOT = Path(__file__).resolve().parents[0]
+LOG_DIR = ROOT / "data_vault"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LLM_LOG = LOG_DIR / "llm_errors.log"
 
 # ================================================================== #
 # ROUTER MODELI (FULL FAILOVER)
@@ -56,27 +61,75 @@ MODELS = {
     "fallback": os.getenv("JARVIS_MODEL", "qwen/qwen3.8-27b")
 }
 
+
+def _log_llm_error(name, exc, extra=None):
+    try:
+        ts = datetime.datetime.utcnow().isoformat()
+        with open(LLM_LOG, "a", encoding="utf-8") as fh:
+            fh.write(f"\n--- {ts} | {name} ---\n")
+            fh.write('EXCEPTION: ' + repr(exc) + "\n")
+            fh.write('TRACEBACK:\n')
+            fh.write(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+            if extra:
+                fh.write('\nEXTRA:\n')
+                try:
+                    fh.write(str(extra) + "\n")
+                except Exception:
+                    pass
+            fh.write("--- end ---\n")
+    except Exception:
+        # best-effort logging; do not raise
+        pass
+
+
 def ask_llm_groq(messages):
-    return client_groq.chat.completions.create(model=MODELS["fast"], messages=messages, temperature=0.7, max_tokens=800).choices[0].message.content
+    try:
+        return client_groq.chat.completions.create(model=MODELS["fast"], messages=messages, temperature=0.7, max_tokens=800).choices[0].message.content
+    except Exception as e:
+        _log_llm_error('GROQ', e)
+        raise
 
 def ask_llm_nvidia_smart(messages):
-    return client_nvidia.chat.completions.create(model=MODELS["smart"], messages=messages, temperature=0.7, max_tokens=800).choices[0].message.content
+    try:
+        return client_nvidia.chat.completions.create(model=MODELS["smart"], messages=messages, temperature=0.7, max_tokens=800).choices[0].message.content
+    except Exception as e:
+        _log_llm_error('NVIDIA_SMART', e)
+        raise
 
 def ask_llm_nvidia_fallback(messages):
-    return client_nvidia.chat.completions.create(model=MODELS["fallback"], messages=messages, temperature=0.7, max_tokens=800).choices[0].message.content
+    try:
+        return client_nvidia.chat.completions.create(model=MODELS["fallback"], messages=messages, temperature=0.7, max_tokens=800).choices[0].message.content
+    except Exception as e:
+        _log_llm_error('NVIDIA_FALLBACK', e)
+        raise
 
 def ask_jarvis(messages):
+    # Primary -> GROQ, Smart -> NVIDIA, Fallback -> NVIDIA fallback
     try:
         return ask_llm_groq(messages)
-    except Exception as e:
+    except Exception:
         print(f"[ROUTER] Groq Fail -> Switching to NVIDIA Smart...", end="\r")
         try:
             return ask_llm_nvidia_smart(messages)
-        except Exception as e:
+        except Exception:
             try:
                 return ask_llm_nvidia_fallback(messages)
             except Exception as e:
-                return f"BŁĄD KRYTYCZNY: Wszystkie modele zawiodły. {e}"
+                # final fallback: try local web research to provide a helpful reply
+                try:
+                    from skills import web_research
+                    # use last user message as query if available
+                    last_msg = ''
+                    try:
+                        last_msg = messages[-1].get('content','') if messages else ''
+                    except Exception:
+                        last_msg = ''
+                    fallback_query = f"Fallback LLM unavailable. Przekażę zapytanie: {last_msg[:800]}"
+                    result = web_research.run(fallback_query)
+                    return f"FALLBACK (local web_research):\n{result}"
+                except Exception as ex2:
+                    _log_llm_error('ALL_MODELS_FAILED', e, extra=ex2)
+                    return f"BŁĄD KRYTYCZNY: Wszystkie modele zawiodły i fallback nie powiódł się. Sprawdź {LLM_LOG} dla szczegółów."
 
 # ================================================================== #
 # NARZĘDZIA MATEMATYCZNE I TRADINGOWE (WBUDOWANE)
@@ -98,9 +151,6 @@ class Backtester:
         pnl_abs = self.initial_capital * (pnl_pct / 100)
         self.current_capital += pnl_abs
         return {"pnl_pct": round(pnl_pct, 2), "pnl_abs": round(pnl_abs, 2), "final_capital": round(self.current_capital, 2)}
-# Poprawka na pnl_abs:
-# self.current_capital += pnl_abs
-# return {"pnl_pct": round(pnl_pct, 2), "pnl_abs": round(pnl_abs, 2), "final_capital": round(self.current_capital, 2)}
 
 # ================================================================== #
 # WALIDACJA I BEZPIECZEŃSTWO
@@ -160,7 +210,7 @@ def execute_tool(name, raw):
     if name == "READ_FILE":
         try:
             with open(raw, "r", encoding="utf-8") as f: return f"[WYNIK READ_FILE]:\n{f.read()}"
-        except Exception as e: return f"[BŁĄD ODczyTU]: {str(e)}"
+        except Exception as e: return f"[BŁĄD ODczytu]: {str(e)}"
 
     if name == "LIST_FILES":
         try:
@@ -232,7 +282,7 @@ def main():
     print("\n" + "="*60)
     print("   JARVIS ONE - REMASTERED IMMORTAL ENGINE (ULTIMATE v3.6)")
     print("="*60)
-    print("Status: SYSTEM ONLINE | Model: " + MODELS["fast"])
+    print("Status: SYSTEM ONLINE | Model: " + MODELS["fast"]) 
     print("'exit' aby wyjść.\n")
 
     history = [{"role": "system", "content": build_system_prompt()}]
@@ -279,7 +329,13 @@ def main():
                 history.append({"role": "assistant", "content": reply})
                 break
         except KeyboardInterrupt: break
-        except Exception as e: print(f"[SYSTEM ERROR]: {str(e)}")
+        except Exception as e: 
+            # Log unexpected system errors and continue
+            try:
+                _log_llm_error('SYSTEM', e)
+            except Exception:
+                pass
+            print(f"[SYSTEM ERROR]: {str(e)}")
 
 if __name__ == "__main__":
     main()

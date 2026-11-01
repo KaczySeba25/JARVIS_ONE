@@ -1,0 +1,12 @@
+openai>=1.0.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+pandas>=2.2.0
+aiohttp>=3.9.0
+web3>=6.0.0
+tavily-python>=0.3.0
+duckduckgo-search>=6.1.0
+beautifulsoup4>=4.12.0
+lxml>=5.2.0
+cryptography>=42.0.0
+playwright>=1.41.0
